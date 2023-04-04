@@ -214,7 +214,7 @@ void WTSBaseDataMgr::release()
 	}
 }
 
-bool WTSBaseDataMgr::loadSessions(const char* filename, bool isUTF8)
+bool WTSBaseDataMgr::loadSessions(const char* filename)
 {
 	if (!StdFile::exists(filename))
 	{
@@ -222,7 +222,7 @@ bool WTSBaseDataMgr::loadSessions(const char* filename, bool isUTF8)
 		return false;
 	}
 
-	WTSVariant* root = WTSCfgLoader::load_from_file(filename, isUTF8);
+	WTSVariant* root = WTSCfgLoader::load_from_file(filename);
 	if (root == NULL)
 	{
 		WTSLogger::error("Loading session config file {} failed", filename);
@@ -290,7 +290,7 @@ void parseCommodity(WTSCommodityInfo* pCommInfo, WTSVariant* jPInfo)
 	pCommInfo->setMinLots(minLots);
 }
 
-bool WTSBaseDataMgr::loadCommodities(const char* filename, bool isUTF8)
+bool WTSBaseDataMgr::loadCommodities(const char* filename)
 {
 	if (!StdFile::exists(filename))
 	{
@@ -298,7 +298,7 @@ bool WTSBaseDataMgr::loadCommodities(const char* filename, bool isUTF8)
 		return false;
 	}
 
-	WTSVariant* root = WTSCfgLoader::load_from_file(filename, isUTF8);
+	WTSVariant* root = WTSCfgLoader::load_from_file(filename);
 	if (root == NULL)
 	{
 		WTSLogger::error("Loading commodities config file {} failed", filename);
@@ -344,7 +344,7 @@ bool WTSBaseDataMgr::loadCommodities(const char* filename, bool isUTF8)
 	return true;
 }
 
-bool WTSBaseDataMgr::loadContracts(const char* filename, bool isUTF8)
+bool WTSBaseDataMgr::loadContracts(const char* filename)
 {
 	if (!StdFile::exists(filename))
 	{
@@ -352,7 +352,7 @@ bool WTSBaseDataMgr::loadContracts(const char* filename, bool isUTF8)
 		return false;
 	}
 
-	WTSVariant* root = WTSCfgLoader::load_from_file(filename, isUTF8);
+	WTSVariant* root = WTSCfgLoader::load_from_file(filename);
 	if (root == NULL)
 	{
 		WTSLogger::error("Loading contracts config file {} failed", filename);
@@ -422,13 +422,19 @@ bool WTSBaseDataMgr::loadContracts(const char* filename, bool isUTF8)
 
 			cInfo->setCommInfo(commInfo);
 
-			uint32_t maxMktQty = 0;
-			uint32_t maxLmtQty = 0;
+			uint32_t maxMktQty = 1;
+			uint32_t maxLmtQty = 1;
+			uint32_t minMktQty = 1;
+			uint32_t minLmtQty = 1;
 			if (jcInfo->has("maxmarketqty"))
 				maxMktQty = jcInfo->getUInt32("maxmarketqty");
 			if (jcInfo->has("maxlimitqty"))
 				maxLmtQty = jcInfo->getUInt32("maxlimitqty");
-			cInfo->setVolumeLimits(maxMktQty, maxLmtQty);
+			if (jcInfo->has("minmarketqty"))
+				minMktQty = jcInfo->getUInt32("minmarketqty");
+			if (jcInfo->has("minlimitqty"))
+				minLmtQty = jcInfo->getUInt32("minlimitqty");
+			cInfo->setVolumeLimits(maxMktQty, maxLmtQty, minMktQty, minLmtQty);
 
 			WTSContractList* contractList = (WTSContractList*)m_mapExchgContract->get(ShortKey(cInfo->getExchg()));
 			if (contractList == NULL)
@@ -465,7 +471,7 @@ bool WTSBaseDataMgr::loadHolidays(const char* filename)
 		return false;
 	}
 
-	WTSVariant* root = WTSCfgLoader::load_from_file(filename, true);
+	WTSVariant* root = WTSCfgLoader::load_from_file(filename);
 	if (root == NULL)
 	{
 		WTSLogger::error("Loading holidays config file {} failed", filename);

@@ -12,6 +12,7 @@
 #include <string>
 #include <queue>
 #include <stdint.h>
+#include <unordered_map>
 #include <boost/asio/io_service.hpp>
 
 #include "../Includes/WTSTypes.h"
@@ -24,6 +25,8 @@
 #include "../Share/IniHelper.hpp"
 #include "../Share/StdUtils.hpp"
 #include "../Share/DLLHelper.hpp"
+#include "../Share/WtKVCache.hpp"
+
 
 USING_NS_WTP;
 
@@ -164,7 +167,6 @@ protected:
 	std::string		m_strErrInfo;  // 返回错误信息
 
 	ITraderSpi*		m_bscSink;
-	//IOptTraderSpi*	m_optSink;
 	uint64_t		m_uLastQryTime;
 
 	uint32_t					m_lDate;
@@ -180,8 +182,10 @@ protected:
 	PositionMap*				m_mapPosition;
 	WTSArray*					m_ayTrades;
 	WTSArray*					m_ayOrders;
-	WTSArray*					m_ayExecOrds;
 	WTSArray*					m_ayPosDetail;
+
+	std::unordered_map<std::string, std::string> m_OrderIdMap;  // 跟踪记录已经完成的订单信息
+	std::unordered_map<std::string, std::vector<int>> umapOrderPos;  // 遍历持仓，统计每个合约同一个OrderID的委托情况
 
 	IBaseDataMgr*				m_bdMgr;
 
@@ -196,8 +200,6 @@ protected:
 
 	boost::asio::io_service		_asyncio;
 
-	tagXTReqUserLoginField	m_loginField;
-
 	std::string		m_strModule;
 	DllHandle		m_hInstAres;
 	typedef void*	(*pfnCreateObj)(const char*, const char*);
@@ -206,5 +208,10 @@ protected:
 	pfnDestroyObj	m_pfnDestroyObj;
 
 	IniHelper		m_iniHelper;
+
+	//委托单标记缓存器
+	//WtKVCache		m_eidCache;
+	//订单标记缓存器
+	//WtKVCache		m_oidCache;
 };
 

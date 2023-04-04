@@ -25,6 +25,7 @@
 
 #include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
+#include "rapidjson/filereadstream.h"
 namespace rj = rapidjson;
 
 const char* CMP_ALG_NAMES[] =
@@ -258,13 +259,13 @@ void CtaMocker::dump_chartdata()
 				jLine.AddMember("name", rj::Value(cLine._name.c_str(), allocator), allocator);
 				jLine.AddMember("line_type", cLine._lineType, allocator);
 
-				rj::Value jVals(rj::kArrayType);
-				for(const double& val : cLine._values)
-				{
-					jVals.PushBack(val, allocator);
-				}
+				//rj::Value jVals(rj::kArrayType);
+				//for(const double& val : cLine._values)
+				//{
+				//	jVals.PushBack(val, allocator);
+				//}
 
-				jLine.AddMember("values", jVals, allocator);
+				//jLine.AddMember("values", jVals, allocator);
 
 				jLines.PushBack(jLine, allocator);
 			}
@@ -285,22 +286,22 @@ void CtaMocker::dump_chartdata()
 		root.AddMember("index", jIndice, allocator);
 	}
 
-	if(!_chart_marks.empty())
-	{
-		rj::Value jMarks(rj::kArrayType);
-		for(const ChartMark& mark : _chart_marks)
-		{
-			rj::Value jMark(rj::kObjectType);
-			jMark.AddMember("bartime", mark._bartime, allocator);
-			jMark.AddMember("price", mark._price, allocator);
-			jMark.AddMember("icon", rj::Value(mark._icon.c_str(), allocator), allocator);
-			jMark.AddMember("tag", rj::Value(mark._tag.c_str(), allocator), allocator);
+	//if(!_chart_marks.empty())
+	//{
+	//	rj::Value jMarks(rj::kArrayType);
+	//	for(const ChartMark& mark : _chart_marks)
+	//	{
+	//		rj::Value jMark(rj::kObjectType);
+	//		jMark.AddMember("bartime", mark._bartime, allocator);
+	//		jMark.AddMember("price", mark._price, allocator);
+	//		jMark.AddMember("icon", rj::Value(mark._icon.c_str(), allocator), allocator);
+	//		jMark.AddMember("tag", rj::Value(mark._tag.c_str(), allocator), allocator);
 
-			jMarks.PushBack(jMark, allocator);
-		}
+	//		jMarks.PushBack(jMark, allocator);
+	//	}
 
-		root.AddMember("marks", jMarks, allocator);
-	}
+	//	root.AddMember("marks", jMarks, allocator);
+	//}
 
 	if(_persist_data)
 	{
@@ -318,6 +319,18 @@ void CtaMocker::dump_chartdata()
 		rj::PrettyWriter<rj::StringBuffer> writer(sb);
 		root.Accept(writer);
 		StdFile::write_file_content(filename.c_str(), sb.GetString());
+
+		filename = folder;
+		filename += "indice.csv";
+		std::string content = "bartime,index_name,line_name,value\n";
+		if (!_index_logs.str().empty()) content += _index_logs.str();
+		StdFile::write_file_content(filename.c_str(), (void*)content.c_str(), content.size());
+
+		filename = folder;
+		filename += "marks.csv";
+		content = "bartime,price,icon,tag\n";
+		if (!_mark_logs.str().empty()) content += _mark_logs.str();
+		StdFile::write_file_content(filename.c_str(), (void*)content.c_str(), content.size());
 	}
 }
 
@@ -434,6 +447,176 @@ bool CtaMocker::init_cta_factory(WTSVariant* cfg)
 	return true;
 }
 
+void CtaMocker::load_incremental_data(const char* incremental_backtest_base)
+{
+	std::string folder = WtHelper::getOutputDir();
+	folder += incremental_backtest_base;
+	folder += "/";
+	WTSLogger::info("loading incremental data from: {}", folder);
+
+	std::string tradesFilename = folder + "trades.csv";
+	if (boost::filesystem::exists(tradesFilename))
+	{
+		std::ifstream tradesFile(tradesFilename);
+		std::string str;
+		// 跳过标题行
+		std::getline(tradesFile, str);
+		while (std::getline(tradesFile, str))
+		{
+			_trade_logs << str << "\n";
+		}
+	}
+
+	std::string closesFilename = folder + "closes.csv";
+	if (boost::filesystem::exists(closesFilename))
+	{
+		std::ifstream closesFile(closesFilename);
+		std::string str;
+		// 跳过标题行
+		std::getline(closesFile, str);
+		while (std::getline(closesFile, str))
+		{
+			_close_logs << str << "\n";
+		}
+	}
+
+	std::string fundsFilename = folder + "funds.csv";
+	if (boost::filesystem::exists(fundsFilename))
+	{
+		std::ifstream fundsFile(fundsFilename);
+		std::string str;
+		// 跳过标题行
+		std::getline(fundsFile, str);
+		while (std::getline(fundsFile, str))
+		{
+			_fund_logs << str << "\n";
+		}
+	}
+
+	std::string positionsFilename = folder + "positions.csv";
+	if (boost::filesystem::exists(positionsFilename))
+	{
+		std::ifstream positionsFile(positionsFilename);
+		std::string str;
+		// 跳过标题行
+		std::getline(positionsFile, str);
+		while (std::getline(positionsFile, str))
+		{
+			_pos_logs << str << "\n";
+		}
+	}
+
+	std::string signalsFilename = folder + "signals.csv";
+	if (boost::filesystem::exists(signalsFilename))
+	{
+		std::ifstream signalsFile(signalsFilename);
+		std::string str;
+		// 跳过标题行
+		std::getline(signalsFile, str);
+		while (std::getline(signalsFile, str))
+		{
+			_sig_logs << str << "\n";
+		}
+	}
+
+	std::string strategyDumpFilename = folder + fmtutil::format("{}.json", incremental_backtest_base);
+	if (boost::filesystem::exists(strategyDumpFilename))
+	{
+		WTSLogger::info("load incremental data json: {}", strategyDumpFilename);
+		FILE* fp = fopen(strategyDumpFilename.c_str(), "rb");
+		char readBuffer[65536];
+		rj::FileReadStream strategyDumpFile(fp, readBuffer, sizeof(readBuffer));
+		rj::Document d;
+		d.ParseStream(strategyDumpFile);
+		fclose(fp);
+		if (d.HasMember("positions"))
+		{
+			const rj::Value& positions = d["positions"];
+			for (rj::SizeType i = 0; i < positions.Size(); i++)
+			{
+				const rj::Value& positionEntry = positions[i];
+				const char* positionEntry_code = positionEntry["code"].GetString();
+				PosInfo& pInfo = _pos_map[positionEntry_code];
+				pInfo._volume = positionEntry["volume"].GetDouble();
+				pInfo._closeprofit = positionEntry["closeprofit"].GetDouble();
+				pInfo._dynprofit = positionEntry["dynprofit"].GetDouble();
+				pInfo._last_entertime = positionEntry["lastentertime"].GetUint64();
+				pInfo._last_exittime = positionEntry["lastexittime"].GetUint64();
+
+				if (positionEntry.HasMember("details"))
+				{
+					const rj::Value& details = positionEntry["details"];
+					for (rj::SizeType j = 0; j < details.Size(); j++)
+					{
+						const rj::Value& positionDetailEntry = details[j];
+						DetailInfo curPosDetail;
+						curPosDetail._long = positionDetailEntry["long"].GetBool();
+						curPosDetail._price = positionDetailEntry["price"].GetDouble();
+						curPosDetail._max_price = positionDetailEntry["maxprice"].GetDouble();
+						curPosDetail._min_price = positionDetailEntry["minprice"].GetDouble();
+						curPosDetail._volume = positionDetailEntry["volume"].GetDouble();
+						curPosDetail._opentime = positionDetailEntry["opentime"].GetUint64();
+						curPosDetail._opentdate = positionDetailEntry["opentdate"].GetInt();
+						curPosDetail._profit = positionDetailEntry["profit"].GetDouble();
+						curPosDetail._max_profit = positionDetailEntry["maxprofit"].GetDouble();
+						curPosDetail._max_loss = positionDetailEntry["maxloss"].GetDouble();
+						strcpy(curPosDetail._opentag, positionDetailEntry["opentag"].GetString());
+						pInfo._details.push_back(curPosDetail);
+					}
+				}
+			}
+		}
+
+		if (d.HasMember("fund"))
+		{
+			_fund_info._total_profit = d["fund"]["total_profit"].GetDouble();
+			_fund_info._total_dynprofit = d["fund"]["total_dynprofit"].GetDouble();
+			_fund_info._total_fees = d["fund"]["total_fees"].GetDouble();
+		}
+
+		if (d.HasMember("signals"))
+		{
+			for (rj::Value::ConstMemberIterator itr = d["signals"].MemberBegin(); itr != d["signals"].MemberEnd(); ++itr)
+			{
+				std::string stkCode = itr->name.GetString();
+				SigInfo& sInfo = _sig_map[stkCode];
+				sInfo._usertag = itr->value["usertag"].GetString();
+				sInfo._volume = itr->value["volume"].GetDouble();
+				sInfo._sigprice = itr->value["sigprice"].GetDouble();
+				sInfo._gentime = itr->value["gentime"].GetUint64();
+			}
+		}
+
+		if (d.HasMember("conditions") && d["conditions"].HasMember("items"))
+		{
+			// conditions -> items 下面的内容是两层嵌套   items[CODE] is a list
+			rj::Value& conditionItemsEntry = d["conditions"]["items"];
+
+			for (rj::Value::ConstMemberIterator itr = conditionItemsEntry.MemberBegin(); itr != conditionItemsEntry.MemberEnd(); ++itr)
+			{
+				std::string stkCode = itr->name.GetString();
+				for (rj::SizeType i = 0; i < itr->value.Size(); i++)
+				{
+					const rj::Value& conditionItemStkCondEntry = itr->value[i];
+					CondEntrust condEntrust;
+					strcpy(condEntrust._usertag, conditionItemStkCondEntry["usertag"].GetString());
+					condEntrust._field = (WTSCompareField)conditionItemStkCondEntry["field"].GetInt();
+					condEntrust._alg = (WTSCompareType)conditionItemStkCondEntry["alg"].GetInt();
+					condEntrust._target = conditionItemStkCondEntry["target"].GetDouble();
+					condEntrust._qty = conditionItemStkCondEntry["qty"].GetDouble();
+					condEntrust._action = (char)conditionItemStkCondEntry["action"].GetUint();
+
+					_condtions[stkCode].push_back(condEntrust);
+				}
+			}
+		}
+	}
+	else
+	{
+		WTSLogger::warn("fail load incremental data json: {}", strategyDumpFilename);
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 //IDataSink
 void CtaMocker::handle_init()
@@ -541,6 +724,7 @@ void CtaMocker::proc_tick(const char* stdCode, double last_px, double cur_px)
 
 		const CondList& condList = it->second;
 		double curPrice = cur_px;
+		const CondEntrust* matchedEntrust = NULL;
 		for (const CondEntrust& entrust : condList)
 		{
 			/*
@@ -581,6 +765,12 @@ void CtaMocker::proc_tick(const char* stdCode, double last_px, double cur_px)
 				default:
 					break;
 				}
+
+				if (isMatched)
+				{
+					matchedEntrust = &entrust;
+					break;
+				}
 			}
 			else
 			{
@@ -589,83 +779,117 @@ void CtaMocker::proc_tick(const char* stdCode, double last_px, double cur_px)
 				{
 				case WCT_Equal:
 					isMatched = decimal::le(left_px, entrust._target) && decimal::ge(right_px, entrust._target);
-					curPrice = entrust._target;
 					break;
 				case WCT_Larger:
 					isMatched = decimal::gt(right_px, entrust._target);
-					curPrice = max(left_px, entrust._target);
 					break;
 				case WCT_LargerOrEqual:
 					isMatched = decimal::ge(right_px, entrust._target);
-					curPrice = max(left_px, entrust._target);
 					break;
 				case WCT_Smaller:
 					isMatched = decimal::lt(left_px, entrust._target);
-					curPrice = min(right_px, entrust._target);
 					break;
 				case WCT_SmallerOrEqual:
 					isMatched = decimal::le(left_px, entrust._target);
-					curPrice = min(right_px, entrust._target);
 					break;
 				default:
 					break;
 				}
+
+				if (isMatched)
+				{
+					/*
+					* By HeJ @ 2023.02.27
+					* 在bar回测中，经常会出现同一个价格触发了多个条件单时，要选出一个作为最终的触发价，遵循以下规则：
+					* 1 alg不同的条件单，或者alg为WCT_Equal，以最先设置的那个为准
+					* 2 alg一样的调价单，如果是WCT_Larger与WCT_LargerOrEqual，取触发价较小的，WCT_Smaller与WCT_SmallerOrEqual，取触发价较大的
+					*/
+					if (matchedEntrust == NULL)
+					{
+						matchedEntrust = &entrust;
+						if (entrust._alg == WCT_Larger || entrust._alg == WCT_LargerOrEqual)
+							curPrice = max(left_px, entrust._target);
+						else if (entrust._alg == WCT_Smaller || entrust._alg == WCT_SmallerOrEqual)
+							curPrice = min(right_px, entrust._target);
+						else
+							curPrice = entrust._target;
+					}
+					else if (matchedEntrust->_alg == entrust._alg)
+					{
+						if (entrust._alg == WCT_Larger || entrust._alg == WCT_LargerOrEqual)
+						{
+							if (entrust._target < matchedEntrust->_target)
+							{
+								matchedEntrust = &entrust;
+								curPrice = max(left_px, entrust._target);
+							}
+						}
+						else if (entrust._alg == WCT_Smaller || entrust._alg == WCT_SmallerOrEqual)
+						{
+							if (entrust._target > matchedEntrust->_target)
+							{
+								matchedEntrust = &entrust;
+								curPrice = min(right_px, entrust._target);
+							}
+						}
+					}
+				}
 			}
+		}
 
-
-			if (isMatched)
+		if (matchedEntrust != NULL)
+		{
+			const CondEntrust& entrust = *matchedEntrust;
+			double price = curPrice;
+			double curQty = stra_get_position(stdCode);
+			//_replayer->is_tick_enabled() ? newTick->price() : entrust._target;	//如果开启了tick回测,则用tick数据的价格,如果没有开启,则只能用条件单价格
+			WTSLogger::log_dyn("strategy", _name.c_str(), LL_INFO,
+				"Condition order triggered[newprice: {}{}{}], instrument: {}, {} {}",
+				curPrice, CMP_ALG_NAMES[entrust._alg], entrust._target, stdCode, ACTION_NAMES[entrust._action], entrust._qty);
+			switch (entrust._action)
 			{
-				double price = curPrice;
-				double curQty = stra_get_position(stdCode);
-				//_replayer->is_tick_enabled() ? newTick->price() : entrust._target;	//如果开启了tick回测,则用tick数据的价格,如果没有开启,则只能用条件单价格
-				WTSLogger::log_dyn("strategy", _name.c_str(), LL_INFO,
-					"Condition order triggered[newprice: {}{}{}], instrument: {}, {} {}",
-					curPrice, CMP_ALG_NAMES[entrust._alg], entrust._target, stdCode, ACTION_NAMES[entrust._action], entrust._qty);
-				switch (entrust._action)
-				{
-				case COND_ACTION_OL:
-				{
-					if (decimal::lt(curQty, 0))
-						append_signal(stdCode, entrust._qty, entrust._usertag, price, 2);
-					else
-						append_signal(stdCode, curQty + entrust._qty, entrust._usertag, price, 2);
-				}
-				break;
-				case COND_ACTION_CL:
-				{
-					double maxQty = min(curQty, entrust._qty);
-					append_signal(stdCode, curQty - maxQty, entrust._usertag, price, 2);
-				}
-				break;
-				case COND_ACTION_OS:
-				{
-					if (decimal::gt(curQty, 0))
-						append_signal(stdCode, -entrust._qty, entrust._usertag, price, 2);
-					else
-						append_signal(stdCode, curQty - entrust._qty, entrust._usertag, price, 2);
-				}
-				break;
-				case COND_ACTION_CS:
-				{
-					double maxQty = min(abs(curQty), entrust._qty);
-					append_signal(stdCode, curQty + maxQty, entrust._usertag, price, 2);
-				}
-				break;
-				case COND_ACTION_SP:
-				{
+			case COND_ACTION_OL:
+			{
+				if (decimal::lt(curQty, 0))
 					append_signal(stdCode, entrust._qty, entrust._usertag, price, 2);
-				}
-				default: break;
-				}
-
-				//同一个bar设置针对同一个合约的条件单,只可能触发一条
-				//所以这里直接清理掉即可
-				_condtions.erase(it);
-				break;
+				else
+					append_signal(stdCode, curQty + entrust._qty, entrust._usertag, price, 2);
 			}
+			break;
+			case COND_ACTION_CL:
+			{
+				double maxQty = min(curQty, entrust._qty);
+				append_signal(stdCode, curQty - maxQty, entrust._usertag, price, 2);
+			}
+			break;
+			case COND_ACTION_OS:
+			{
+				if (decimal::gt(curQty, 0))
+					append_signal(stdCode, -entrust._qty, entrust._usertag, price, 2);
+				else
+					append_signal(stdCode, curQty - entrust._qty, entrust._usertag, price, 2);
+			}
+			break;
+			case COND_ACTION_CS:
+			{
+				double maxQty = min(abs(curQty), entrust._qty);
+				append_signal(stdCode, curQty + maxQty, entrust._usertag, price, 2);
+			}
+			break;
+			case COND_ACTION_SP:
+			{
+				append_signal(stdCode, entrust._qty, entrust._usertag, price, 2);
+			}
+			default: break;
+			}
+
+			//同一个bar设置针对同一个合约的条件单,只可能触发一条
+			//所以这里直接清理掉即可
+			_condtions.erase(it);
 		}
 	}
 }
+
 
 void CtaMocker::handle_tick(const char* stdCode, WTSTickData* newTick, uint32_t pxType /* = 0 */)
 {
@@ -946,22 +1170,22 @@ bool CtaMocker::on_schedule(uint32_t curDate, uint32_t curTime)
 				 *	如果策略在本轮没有设置指标值，则用上一个数据补齐
 				 *	如果是开始，则用默认值补齐
 				 */
-				for(auto& v : _chart_indice)
-				{
-					ChartIndex& cIndex = v.second;
-					for(auto& line : cIndex._lines)
-					{
-						ChartLine& cLine = line.second;
-						if(cLine._values.size() < _emit_times)
-						{
-							double lastVal = DBL_MAX;
-							if (!cLine._values.empty())
-								lastVal = cLine._values.back();
+				//for(auto& v : _chart_indice)
+				//{
+				//	ChartIndex& cIndex = v.second;
+				//	for(auto& line : cIndex._lines)
+				//	{
+				//		ChartLine& cLine = line.second;
+				//		if(cLine._values.size() < _emit_times)
+				//		{
+				//			double lastVal = DBL_MAX;
+				//			if (!cLine._values.empty())
+				//				lastVal = cLine._values.back();
 
-							cLine._values.emplace_back(lastVal);
-						}
-					}
-				}
+				//			cLine._values.emplace_back(lastVal);
+				//		}
+				//	}
+				//}
 
 				if (_has_hook && _hook_valid)
 				{
@@ -1009,7 +1233,7 @@ void CtaMocker::on_session_begin(uint32_t curTDate)
 		_strategy->on_session_begin(this, curTDate);
 }
 
-void CtaMocker::enum_position(FuncEnumCtaPosCallBack cb)
+void CtaMocker::enum_position(FuncEnumCtaPosCallBack cb, bool bForExecute)
 {
 	faster_hashmap<std::string, double> desPos;
 	for (auto& it : _pos_map)
@@ -1087,9 +1311,9 @@ void CtaMocker::stra_enter_long(const char* stdCode, double qty, const char* use
 	{
 		double curQty = stra_get_position(stdCode);
 		if(decimal::lt(curQty, 0))
-			append_signal(stdCode, qty, userTag, _is_in_schedule ? 0 : 1);
+			append_signal(stdCode, qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 		else
-			append_signal(stdCode, curQty + qty, userTag, _is_in_schedule ? 0 : 1);
+			append_signal(stdCode, curQty + qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 	}
 	else
 	{
@@ -1138,9 +1362,9 @@ void CtaMocker::stra_enter_short(const char* stdCode, double qty, const char* us
 	{
 		double curQty = stra_get_position(stdCode);
 		if(decimal::gt(curQty, 0))
-			append_signal(stdCode, -qty, userTag, _is_in_schedule ? 0 : 1);
+			append_signal(stdCode, -qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 		else
-			append_signal(stdCode, curQty - qty, userTag, _is_in_schedule ? 0 : 1);
+			append_signal(stdCode, curQty - qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 
 	}
 	else
@@ -1187,7 +1411,7 @@ void CtaMocker::stra_exit_long(const char* stdCode, double qty, const char* user
 	if (decimal::eq(limitprice, 0.0) && decimal::eq(stopprice, 0.0))	//如果不是动态下单模式,则直接触发
 	{
 		double maxQty = min(curQty, qty);
-		append_signal(stdCode, curQty - qty, userTag, _is_in_schedule ? 0 : 1);
+		append_signal(stdCode, curQty - qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 	}
 	else
 	{
@@ -1238,7 +1462,7 @@ void CtaMocker::stra_exit_short(const char* stdCode, double qty, const char* use
 	if (decimal::eq(limitprice, 0.0) && decimal::eq(stopprice, 0.0))	//如果不是动态下单模式,则直接触发
 	{
 		double maxQty = min(abs(curQty), qty);
-		append_signal(stdCode, curQty + maxQty, userTag, _is_in_schedule ? 0 : 1);
+		append_signal(stdCode, curQty + maxQty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 	}
 	else
 	{
@@ -1319,7 +1543,7 @@ void CtaMocker::stra_set_position(const char* stdCode, double qty, const char* u
 	_replayer->sub_tick(_context_id, stdCode);
 	if (decimal::eq(limitprice, 0.0) && decimal::eq(stopprice, 0.0))	//没有设置触发条件，则直接添加信号
 	{
-		append_signal(stdCode, qty, userTag, _is_in_schedule ? 0 : 1);
+		append_signal(stdCode, qty, userTag, 0.0, _is_in_schedule ? 0 : 1);
 	}
 	else
 	{
@@ -1888,7 +2112,7 @@ void CtaMocker::add_chart_mark(double price, const char* icon, const char* tag)
 	uint64_t curTime = _replayer->get_date();
 	curTime = curTime*10000 + _replayer->get_min_time();
 
-	_chart_marks.emplace_back(ChartMark({ curTime, price, icon, tag }));
+	_mark_logs << curTime << "," << price << "," << icon << "," << tag << std::endl;
 }
 
 void CtaMocker::register_index(const char* idxName, uint32_t indexType)
@@ -1951,14 +2175,9 @@ bool CtaMocker::set_index_value(const char* idxName, const char* lineName, doubl
 		return false;
 	}
 
-	ChartLine& cLine = bit->second;
-
-	//如果策略多次在同一条K线设置同一个指标值
-	//就只修改最后一个数据
-	if (cLine._values.size() > _emit_times)
-		cLine._values.back() = val;
-	else
-		cLine._values.emplace_back(val);
+	uint64_t curTime = _replayer->get_date();
+	curTime = curTime * 10000 + _replayer->get_min_time();
+	_index_logs << curTime << "," << idxName << "," << lineName << "," << val << std::endl;
 	return true;
 }
 

@@ -93,11 +93,8 @@ WTSBarStruct* WTSDataFactory::updateMin1Data(WTSSessionInfo* sInfo, WTSKlineData
 
 	uint32_t uBarMin = (uMinute / steplen)*steplen + steplen;
 	uint64_t uBarTime = sInfo->minuteToTime(uBarMin);
-	//if(uBarTime > uTime && !sInfo->isInAuctionTime(uTime))
-	//{
-	//	//这种情况只可能是日期倒退
-	//	uDate = TimeUtils::getNextDate(uDate, -1);
-	//}
+	if (uBarTime < uTime)
+		uDate = TimeUtils::getNextDate(uDate, 1);
 	uBarTime = TimeUtils::timeToMinBar(uDate, (uint32_t)uBarTime);
 
 	WTSBarStruct* lastBar = NULL;
@@ -206,7 +203,10 @@ WTSBarStruct* WTSDataFactory::updateMin1Data(WTSSessionInfo* sInfo, WTSKlineData
 		day->hold = tick->openinterest();
 		day->add = tick->additional();
 
-		return day;
+		klineData->appendBar(*day);
+		delete day;
+
+		return klineData->at(-1);
 	}
 	else if (lastTime != INVALID_UINT32 && uBarTime < lastTime)
 	{
@@ -251,9 +251,10 @@ WTSBarStruct* WTSDataFactory::updateMin5Data(WTSSessionInfo* sInfo, WTSKlineData
 	uint32_t uTime = TimeUtils::minBarToTime(curBar.time);
 	uint32_t uMinute = sInfo->timeToMinutes(uTime) - 5;
 
-
 	uint32_t uBarMin = (uMinute / steplen)*steplen + steplen;
 	uint64_t uBarTime = sInfo->minuteToTime(uBarMin);
+	if (uBarTime < uTime)
+		uDate = TimeUtils::getNextDate(uDate, 1);
 	uBarTime = TimeUtils::timeToMinBar(uDate, (uint32_t)uBarTime);
 
 	WTSBarStruct* lastBar = NULL;
@@ -344,7 +345,10 @@ WTSBarStruct* WTSDataFactory::updateMin5Data(WTSSessionInfo* sInfo, WTSKlineData
 		day->hold = tick->openinterest();
 		day->add = tick->additional();
 
-		return day;
+		klineData->appendBar(*day);
+		delete day;
+
+		return klineData->at(-1);
 	}
 	else
 	{
@@ -517,11 +521,8 @@ WTSKlineData* WTSDataFactory::extractMin1Data(WTSKlineSlice* baseKline, uint32_t
 
 		uint32_t uBarMin = (uMinute/steplen)*steplen + steplen;
 		uint64_t uBarTime = sInfo->minuteToTime(uBarMin);
-		//if(uBarTime > uTime && !sInfo->isInAuctionTime(uTime))
-		//{
-		//	//这种情况只可能是日期倒退
-		//	uDate = TimeUtils::getNextDate(uDate, -1);
-		//}
+		if (uBarTime < uTime)
+			uDate = TimeUtils::getNextDate(uDate, 1);
 		uBarTime = TimeUtils::timeToMinBar(uDate, (uint32_t)uBarTime);
 
 		WTSBarStruct* lastBar = NULL;
@@ -531,7 +532,7 @@ WTSKlineData* WTSDataFactory::extractMin1Data(WTSKlineSlice* baseKline, uint32_t
 		}
 
 		bool bNewBar = false;
-		if(lastBar == NULL || lastBar->date != uDate || lastBar->time != uBarTime)
+		if(lastBar == NULL || lastBar->time != uBarTime)
 		{
 			//if(lastBar)
 			//{
@@ -611,9 +612,10 @@ WTSKlineData* WTSDataFactory::extractMin5Data(WTSKlineSlice* baseKline, uint32_t
 		uint32_t uTime = TimeUtils::minBarToTime(curBar.time);
 		uint32_t uMinute = sInfo->timeToMinutes(uTime)-5;
 
-
 		uint32_t uBarMin = (uMinute/steplen)*steplen+steplen;
 		uint64_t uBarTime = sInfo->minuteToTime(uBarMin);
+		if (uBarTime < uTime)
+			uDate = TimeUtils::getNextDate(uDate, 1);
 		uBarTime = TimeUtils::timeToMinBar(uDate, (uint32_t)uBarTime);
 
 		WTSBarStruct* lastBar = NULL;
@@ -623,7 +625,7 @@ WTSKlineData* WTSDataFactory::extractMin5Data(WTSKlineSlice* baseKline, uint32_t
 		}
 
 		bool bNewBar = false;
-		if(lastBar == NULL || lastBar->date != uDate || lastBar->time != uBarTime)
+		if(lastBar == NULL || lastBar->time != uBarTime)
 		{
 			//if(lastBar)
 			//{
@@ -777,7 +779,7 @@ WTSKlineData* WTSDataFactory::extractKlineData(WTSTickSlice* ayTicks, uint32_t s
 
 		if(bUnixTime)
 		{
-			barTime = (uint64_t)TimeUtils::makeTime(actDt, barTime * 1000) / 1000;
+			barTime = (uint64_t)TimeUtils::makeTime(actDt, (long)(barTime * 1000)) / 1000;
 		}
 		else
 		{
